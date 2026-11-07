@@ -119,11 +119,13 @@ export class SpeedSync {
 			this.keyDownAt = Date.now()
 		} else {
 			delete this.keyDownAt
+			delete this.holdToSpeedForKeyboard
 		}
 		this.realize()
 	}
 	handleKeyUp = () => {
 		delete this.keyDownAt
+		delete this.holdToSpeedForKeyboard
 		this.realize()
 	}
 	previousUrl: string
@@ -131,9 +133,9 @@ export class SpeedSync {
 		if (this.latest) {
 			let speed = this.latest.speed
 			if (this.holdToSpeed && this.pointerDownActive()) {
-				speed *= this.holdToSpeed
+				speed = this.holdToSpeed
 			} else if (this.holdToSpeedForKeyboard && this.keyDownActive()) {
-				speed *= this.holdToSpeedForKeyboard
+				speed = this.holdToSpeedForKeyboard
 			}
 
 			gvar.os.mediaTower.applySpeedToAll(speed, this.latest.freePitch)

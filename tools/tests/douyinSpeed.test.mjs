@@ -192,17 +192,68 @@ test("bridge uses the latest effective speed for keyboard and pointer holds", ()
 	sync.update()
 	assert.equal(messages.at(-1).speed, 3)
 	sync.processTemporarySpeed(2)
-	assert.equal(messages.at(-1).speed, 6)
+	assert.equal(messages.at(-1).speed, 2)
 	sync.handleKeyUp()
 	assert.equal(messages.at(-1).speed, 3)
 	sync.holdToSpeed = 2
 	sync.pointerDownAt = Date.now() - 700
 	sync.realize()
-	assert.equal(messages.at(-1).speed, 6)
+	assert.equal(messages.at(-1).speed, 2)
 	sync.clearPointerDown()
 	assert.equal(messages.at(-1).speed, 3)
 	sync.processTemporarySpeed(10)
+	assert.equal(messages.at(-1).speed, 10)
+})
+
+test("holds are absolute overrides, not multipliers of the configured speed", () => {
+	const { sync, messages } = syncEnv()
+
+	// Lower base: 1.5x + hold 3 must play at 3x, not 4.5x.
+	sync.latest.speed = 1.5
+	sync.update()
+	sync.processTemporarySpeed(3)
+	assert.equal(messages.at(-1).speed, 3)
+
+	// Higher base: 5x + hold 3 must drop to 3x.
+	sync.latest.speed = 5
+	sync.processTemporarySpeed(3)
+	assert.equal(messages.at(-1).speed, 3)
+
+	// Changing the base mid-hold keeps the hold value; release returns to the new base.
+	sync.latest.speed = 2
+	sync.update()
+	assert.equal(messages.at(-1).speed, 3)
+	sync.handleKeyUp()
+	assert.equal(messages.at(-1).speed, 2)
+
+	// Out-of-range hold values clamp on both ends.
+	sync.processTemporarySpeed(20)
 	assert.equal(messages.at(-1).speed, 16)
+	sync.processTemporarySpeed(0.5)
+	assert.equal(messages.at(-1).speed, 0.5)
+
+	// Pointer hold is absolute too, and respects the 600ms activation delay.
+	sync.handleKeyUp()
+	sync.holdToSpeed = 2
+	sync.latest.speed = 5
+	sync.pointerDownAt = Date.now() - 100
+	sync.realize()
+	assert.equal(messages.at(-1).speed, 5)
+	sync.pointerDownAt = Date.now() - 700
+	sync.realize()
+	assert.equal(messages.at(-1).speed, 2)
+	sync.clearPointerDown()
+	assert.equal(messages.at(-1).speed, 5)
+})
+
+test("releasing a keyboard hold clears the held factor", () => {
+	const { sync, messages } = syncEnv()
+	sync.update()
+	sync.processTemporarySpeed(3)
+	assert.equal(messages.at(-1).speed, 3)
+	sync.handleKeyUp()
+	assert.equal(sync.holdToSpeedForKeyboard, undefined)
+	assert.equal(messages.at(-1).speed, 2)
 })
 
 test("bridge initialization sends current state, including disable, rather than stale speed", () => {
@@ -211,7 +262,7 @@ test("bridge initialization sends current state, including disable, rather than 
 	sync.processTemporarySpeed(2)
 	assert.equal(messages.length, 0)
 	for (const cb of server.initCbs) cb()
-	assert.equal(messages.at(-1).speed, 4)
+	assert.equal(messages.at(-1).speed, 2)
 	delete sync.latest
 	sync.update()
 	for (const cb of server.initCbs) cb()
